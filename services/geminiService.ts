@@ -34,6 +34,14 @@ const getAI = () => {
     throw new Error("VITE_API_KEY_MISSING"); 
   }
 
+  // Sanitization: Trim whitespace
+  apiKey = apiKey.trim();
+
+  // Common User Mistake: Pasting the variable name into the value
+  if (apiKey.startsWith("VITE_API_KEY") || apiKey.includes("=")) {
+     throw new Error("INVALID_KEY_FORMAT_PREFIX");
+  }
+
   aiInstance = new GoogleGenAI({ apiKey });
   return aiInstance;
 };

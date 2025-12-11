@@ -68,14 +68,40 @@ const App: React.FC = () => {
       setView(AppView.LESSON);
     } catch (error: any) {
       console.error("Generation failed", error);
+      
+      // Reset view to HOME immediately so the alert doesn't block the previous Loading state
       setView(AppView.HOME);
-      // Check for our specific error code for missing keys
-      if (error.message && error.message.includes("VITE_API_KEY_MISSING")) {
+
+      const errString = error.message || error.toString();
+
+      // Case 1: Key Missing
+      if (errString.includes("VITE_API_KEY_MISSING")) {
         alert("⚠️ 无法生成内容：\n\n缺少 API Key。请点击右上角的“下载图标”查看如何配置 VITE_API_KEY。");
         setShowInstallGuide(true);
-      } else {
-        alert("生成失败，请检查网络或稍后再试。");
+        return;
       }
+
+      // Case 2: Key Format Error (User pasted prefix)
+      if (errString.includes("INVALID_KEY_FORMAT_PREFIX")) {
+        alert("⚠️ API Key 格式错误\n\n您似乎把 'VITE_API_KEY=' 这段文字也粘贴进去了。\n请回到 Vercel，只粘贴 AIza 开头的那串字符。");
+        return;
+      }
+
+      // Case 3: Network Error (GFW)
+      // "Failed to fetch" is the standard browser error for network blocks/cors
+      if (errString.includes("Failed to fetch") || errString.includes("NetworkError")) {
+        alert("🌐 网络连接失败\n\n您的设备无法连接到 Google 服务器。\n\n💡 提示：如果您在中国大陆，请开启手机 VPN (科学上网) 后再试。");
+        return;
+      }
+
+      // Case 4: Invalid Key (400/403)
+      if (errString.includes("400") || errString.includes("403") || errString.includes("API key not valid")) {
+         alert("🔑 API Key 无效\n\nGoogle 提示您的 Key 不正确或已过期。\n请检查 Key 是否复制完整，或者重新生成一个。");
+         return;
+      }
+      
+      // Case 5: Generic Error
+      alert(`生成失败: ${errString}\n\n请检查网络或稍后再试。`);
     }
   };
 
@@ -119,9 +145,12 @@ const App: React.FC = () => {
       setLoadingSentenceIdx(null);
       setPlayingSentenceIdx(null);
       
-      if (e.message && e.message.includes("VITE_API_KEY_MISSING")) {
+      const errString = e.message || "";
+      if (errString.includes("VITE_API_KEY_MISSING")) {
          alert("请先配置 API Key");
          setShowInstallGuide(true);
+      } else if (errString.includes("Failed to fetch")) {
+         alert("网络连接失败，无法播放语音");
       }
     }
   };

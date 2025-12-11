@@ -1,10 +1,7 @@
 import { GoogleGenAI, Type, Modality, Chat } from "@google/genai";
 import { LessonData, Chunk } from "../types";
 
-const apiKey = process.env.API_KEY || '';
-const ai = new GoogleGenAI({ apiKey });
-
-// Shared Schema for Chunks (used in both Lesson and Chat)
+// Shared Schema for Chunks
 const chunkSchema = {
   type: Type.OBJECT,
   properties: {
@@ -16,8 +13,35 @@ const chunkSchema = {
   required: ["text", "isWord"]
 };
 
+// Singleton instance
+let aiInstance: GoogleGenAI | null = null;
+
+// Lazy initialization to prevent top-level crashes in browser
+const getAI = () => {
+  if (aiInstance) return aiInstance;
+
+  // Prioritize VITE_API_KEY for Vite/Vercel environments
+  let apiKey = (import.meta as any).env?.VITE_API_KEY;
+
+  // Fallback to process.env (Node/Standard) only if VITE key is missing
+  if (!apiKey && typeof process !== 'undefined' && process.env) {
+    apiKey = process.env.API_KEY || process.env.VITE_API_KEY;
+  }
+
+  if (!apiKey) {
+    console.error("API Key not found in VITE_API_KEY or process.env.API_KEY");
+    // Throwing a specific error string that App.tsx catches to show the guide
+    throw new Error("VITE_API_KEY_MISSING"); 
+  }
+
+  aiInstance = new GoogleGenAI({ apiKey });
+  return aiInstance;
+};
+
 // 1. Generate Lesson Text Content with Granularity
 export const generateLessonContent = async (scenario: string): Promise<LessonData> => {
+  const ai = getAI();
+
   const prompt = `
     你是一位专业的西班牙语私教。
     场景: "${scenario}"
@@ -88,8 +112,9 @@ export const generateLessonContent = async (scenario: string): Promise<LessonDat
   return JSON.parse(jsonStr) as LessonData;
 };
 
-// 2. Generate Speech from Text (Reused for full lesson and single words)
+// 2. Generate Speech from Text
 export const generateLessonAudio = async (text: string): Promise<string> => {
+  const ai = getAI();
   if (!text) return "";
   
   const response = await ai.models.generateContent({
@@ -116,6 +141,7 @@ export const generateLessonAudio = async (text: string): Promise<string> => {
 
 // 3. Start A2 Chat Session
 export const startA2Chat = () => {
+  const ai = getAI();
   return ai.chats.create({
     model: "gemini-2.5-flash",
     config: {
@@ -126,6 +152,9 @@ export const startA2Chat = () => {
 
 // 4. Send Message and Parse Structure
 export const sendA2ChatMessage = async (chatSession: Chat, message: string) => {
+  // Ensure Key is valid before sending
+  getAI(); 
+  
   const result = await chatSession.sendMessage({ 
     message: message,
     config: {

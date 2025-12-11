@@ -36,6 +36,18 @@
         -ms-overflow-style: none;
         scrollbar-width: none;
       }
+      /* Initial Loading State */
+      #root:empty::before {
+        content: "Entorno Loading...";
+        display: flex;
+        height: 100vh;
+        width: 100vw;
+        align-items: center;
+        justify-content: center;
+        color: #cbd5e1;
+        font-weight: 500;
+        font-size: 1.2rem;
+      }
     </style>
   <script type="importmap">
 {
@@ -50,5 +62,7 @@
 </head>
   <body>
     <div id="root"></div>
+    <!-- CRITICAL: This script loads the React app. Without it, the screen is white. -->
+    <script type="module" src="./index.tsx"></script>
   </body>
 </html>

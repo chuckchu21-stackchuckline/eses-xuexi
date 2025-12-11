@@ -66,10 +66,16 @@ const App: React.FC = () => {
       setAudioBase64(audio);
       
       setView(AppView.LESSON);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Generation failed", error);
-      alert("生成失败，请检查网络或稍后再试。");
       setView(AppView.HOME);
+      // Check for our specific error code for missing keys
+      if (error.message && error.message.includes("VITE_API_KEY_MISSING")) {
+        alert("⚠️ 无法生成内容：\n\n缺少 API Key。请点击右上角的“下载图标”查看如何配置 VITE_API_KEY。");
+        setShowInstallGuide(true);
+      } else {
+        alert("生成失败，请检查网络或稍后再试。");
+      }
     }
   };
 
@@ -108,10 +114,15 @@ const App: React.FC = () => {
       setLoadingSentenceIdx(null);
       setPlayingSentenceIdx(idx);
       await playRawAudio(audio, () => setPlayingSentenceIdx(null));
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
       setLoadingSentenceIdx(null);
       setPlayingSentenceIdx(null);
+      
+      if (e.message && e.message.includes("VITE_API_KEY_MISSING")) {
+         alert("请先配置 API Key");
+         setShowInstallGuide(true);
+      }
     }
   };
 
@@ -218,7 +229,7 @@ const App: React.FC = () => {
                 className="text-emerald-600 text-sm font-medium flex items-center justify-center gap-1 mx-auto hover:bg-emerald-50 px-3 py-1.5 rounded-lg transition-colors"
               >
                 <span className="material-icons-round text-base">install_mobile</span>
-                安装到手机
+                安装帮助
               </button>
             </div>
           </div>

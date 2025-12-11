@@ -44,6 +44,18 @@ export const removeWord = (text: string): SavedWord[] => {
   return newWords;
 };
 
+export const incrementReviewCount = (text: string): SavedWord[] => {
+  const words = getSavedWords();
+  const newWords = words.map(w => {
+    if (w.text === text) {
+      return { ...w, reviewCount: (w.reviewCount || 0) + 1 };
+    }
+    return w;
+  });
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(newWords));
+  return newWords;
+};
+
 export const isWordSaved = (text: string): boolean => {
   const words = getSavedWords();
   return words.some(w => w.text.toLowerCase() === text.toLowerCase());

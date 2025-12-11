@@ -42,5 +42,6 @@ export enum AppView {
   LOADING = 'LOADING',
   LESSON = 'LESSON',
   VOCABULARY = 'VOCABULARY',
-  CHAT = 'CHAT'
+  CHAT = 'CHAT',
+  SETTINGS = 'SETTINGS'
 }

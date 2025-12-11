@@ -5,6 +5,7 @@ import { LoadingScreen } from './components/LoadingScreen';
 import { WordSheet } from './components/WordSheet';
 import { VocabularyView } from './components/VocabularyView';
 import { ChatView } from './components/ChatView';
+import { SettingsView } from './components/SettingsView'; // Import Settings
 import { InstallGuide } from './components/InstallGuide';
 import { generateLessonContent, generateLessonAudio } from './services/geminiService';
 import { playRawAudio, stopAudio } from './services/audioUtils';
@@ -69,39 +70,48 @@ const App: React.FC = () => {
     } catch (error: any) {
       console.error("Generation failed", error);
       
-      // Reset view to HOME immediately so the alert doesn't block the previous Loading state
+      // Reset view to HOME immediately
       setView(AppView.HOME);
 
-      const errString = error.message || error.toString();
+      const errString = (error.message || error.toString()).toLowerCase();
 
       // Case 1: Key Missing
-      if (errString.includes("VITE_API_KEY_MISSING")) {
-        alert("⚠️ 无法生成内容：\n\n缺少 API Key。请点击右上角的“下载图标”查看如何配置 VITE_API_KEY。");
-        setShowInstallGuide(true);
+      if (errString.includes("vite_api_key_missing")) {
+        // Direct user to Settings instead of just showing alert
+        if (confirm("⚠️ 缺少 API Key\n\n请点击“确定”前往设置页面，粘贴您的 Google API Key 即可使用。")) {
+          setView(AppView.SETTINGS);
+        }
         return;
       }
 
-      // Case 2: Key Format Error (User pasted prefix)
-      if (errString.includes("INVALID_KEY_FORMAT_PREFIX")) {
-        alert("⚠️ API Key 格式错误\n\n您似乎把 'VITE_API_KEY=' 这段文字也粘贴进去了。\n请回到 Vercel，只粘贴 AIza 开头的那串字符。");
+      // Case 2: Key Format Error
+      if (errString.includes("invalid_key_format_prefix")) {
+        alert("⚠️ API Key 格式错误\n\n您似乎复制了多余的内容。请只复制 AIza 开头的字符串。");
+        setView(AppView.SETTINGS);
         return;
       }
 
-      // Case 3: Network Error (GFW)
-      // "Failed to fetch" is the standard browser error for network blocks/cors
-      if (errString.includes("Failed to fetch") || errString.includes("NetworkError")) {
-        alert("🌐 网络连接失败\n\n您的设备无法连接到 Google 服务器。\n\n💡 提示：如果您在中国大陆，请开启手机 VPN (科学上网) 后再试。");
+      // Case 3: Rate Limit (Quota) - Even after retries
+      if (errString.includes("resource_exhausted") || errString.includes("429")) {
+        alert("🚦 访问太频繁 (Speed Limit)\n\nGoogle 免费版 API 限制了每分钟请求次数。刚才我们已经自动重试了几次但依然失败。\n\n请喝口水，休息 1 分钟后再试。");
         return;
       }
 
-      // Case 4: Invalid Key (400/403)
-      if (errString.includes("400") || errString.includes("403") || errString.includes("API key not valid")) {
-         alert("🔑 API Key 无效\n\nGoogle 提示您的 Key 不正确或已过期。\n请检查 Key 是否复制完整，或者重新生成一个。");
+      // Case 4: Network Error
+      if (errString.includes("failed to fetch") || errString.includes("networkerror")) {
+        alert("🌐 网络连接失败\n\n无法连接到 Google 服务器。如果您在西班牙，请检查是否在设置中输入了正确的 Key。\n\n错误信息: " + error.message);
+        return;
+      }
+
+      // Case 5: Invalid Key (400/403)
+      if (errString.includes("400") || errString.includes("403") || errString.includes("api key not valid")) {
+         alert("🔑 API Key 无效\n\nGoogle 拒绝了该 Key。可能是过期或无效。\n建议在设置中更换一个新的 Key。");
+         setView(AppView.SETTINGS);
          return;
       }
       
-      // Case 5: Generic Error
-      alert(`生成失败: ${errString}\n\n请检查网络或稍后再试。`);
+      // Case 6: Generic Error
+      alert(`生成失败\n\n如果持续出现，请检查 Key 或网络。\n错误代码: ${error.message}`);
     }
   };
 
@@ -110,7 +120,6 @@ const App: React.FC = () => {
       stopAudio();
       setIsPlayingGlobal(false);
     } else {
-      // Stop any sentence audio
       setPlayingSentenceIdx(null);
       setLoadingSentenceIdx(null);
       stopAudio();
@@ -122,14 +131,12 @@ const App: React.FC = () => {
   };
 
   const playSentenceAudio = async (text: string, idx: number) => {
-    // If clicking the one currently playing, stop it
     if (playingSentenceIdx === idx) {
       stopAudio();
       setPlayingSentenceIdx(null);
       return;
     }
 
-    // Stop global audio or other sentence audio
     stopAudio();
     setIsPlayingGlobal(false);
     setPlayingSentenceIdx(null);
@@ -145,12 +152,12 @@ const App: React.FC = () => {
       setLoadingSentenceIdx(null);
       setPlayingSentenceIdx(null);
       
-      const errString = e.message || "";
-      if (errString.includes("VITE_API_KEY_MISSING")) {
-         alert("请先配置 API Key");
-         setShowInstallGuide(true);
-      } else if (errString.includes("Failed to fetch")) {
-         alert("网络连接失败，无法播放语音");
+      // Improved error for audio playback too
+      const errStr = (e.message || "").toLowerCase();
+      if (errStr.includes("resource_exhausted") || errStr.includes("429")) {
+        alert("🚦 生成语音太快了，请稍等几秒再点。");
+      } else {
+        alert("播放失败: " + e.message);
       }
     }
   };
@@ -170,25 +177,16 @@ const App: React.FC = () => {
     setIsPlayingGlobal(false);
     setPlayingSentenceIdx(null);
     setView(AppView.HOME);
-    // Note: We deliberately reset input and lesson state when going home to start fresh
-    // But if you want to keep state, remove these lines.
     setScenarioInput('');
     setLesson(null);
     setAudioBase64(null);
     setSelectedChunk(null);
   };
 
-  const handleProfileClick = () => {
-    stopAudio();
-    setIsPlayingGlobal(false);
-    setView(AppView.VOCABULARY);
-  };
-
-  const handleChatClick = () => {
-    stopAudio();
-    setIsPlayingGlobal(false);
-    setView(AppView.CHAT);
-  };
+  // View switch handlers
+  const handleProfileClick = () => { stopAudio(); setView(AppView.VOCABULARY); };
+  const handleChatClick = () => { stopAudio(); setView(AppView.CHAT); };
+  const handleSettingsClick = () => { stopAudio(); setView(AppView.SETTINGS); };
 
   const handleChunkClick = (chunk: Chunk) => {
     if (chunk.isWord) {
@@ -202,8 +200,9 @@ const App: React.FC = () => {
         onHome={resetApp} 
         onProfile={handleProfileClick}
         onChat={handleChatClick}
+        onSettings={handleSettingsClick}
         onInstall={() => setShowInstallGuide(true)}
-        activeView={view === AppView.VOCABULARY ? 'VOCABULARY' : view === AppView.CHAT ? 'CHAT' : undefined}
+        activeView={view} // Pass full enum or string
       />
       
       <main className="flex-1 overflow-y-auto no-scrollbar relative">
@@ -251,15 +250,16 @@ const App: React.FC = () => {
                 ))}
               </div>
             </div>
-
-            <div className="mt-12 text-center">
-              <button 
-                onClick={() => setShowInstallGuide(true)}
-                className="text-emerald-600 text-sm font-medium flex items-center justify-center gap-1 mx-auto hover:bg-emerald-50 px-3 py-1.5 rounded-lg transition-colors"
-              >
-                <span className="material-icons-round text-base">install_mobile</span>
-                安装帮助
-              </button>
+            
+            {/* Quick settings link if key is missing */}
+            <div className="mt-auto pt-8 flex justify-center">
+               <button 
+                 onClick={handleSettingsClick} 
+                 className="text-slate-300 text-xs flex items-center gap-1 hover:text-emerald-600 transition-colors"
+               >
+                 <span className="material-icons-round text-sm">settings</span>
+                 配置 API Key
+               </button>
             </div>
           </div>
         )}
@@ -272,6 +272,9 @@ const App: React.FC = () => {
 
         {/* CHAT VIEW */}
         {view === AppView.CHAT && <ChatView />}
+
+        {/* SETTINGS VIEW */}
+        {view === AppView.SETTINGS && <SettingsView />}
 
         {/* LESSON VIEW */}
         {view === AppView.LESSON && lesson && (

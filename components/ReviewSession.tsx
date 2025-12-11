@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { SavedWord } from '../types';
 import { Button } from './Button';
 import { generateLessonAudio } from '../services/geminiService';
-import { playRawAudio } from '../services/audioUtils';
-import { startListening, stopListening, checkPronunciation, isSpeechSupported } from '../services/speechService';
+import { playRawAudio, playSuccessSound } from '../services/audioUtils';
+import { startListening, stopListening, checkPronunciation } from '../services/speechService';
+import { incrementReviewCount } from '../services/vocabService';
 
 interface ReviewSessionProps {
   words: SavedWord[];
@@ -17,11 +18,13 @@ export const ReviewSession: React.FC<ReviewSessionProps> = ({ words, onClose }) 
   const [spokenText, setSpokenText] = useState('');
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
 
-  const currentWord = words[currentIndex];
-  const progress = Math.round(((currentIndex + 1) / words.length) * 100);
+  // Filter out any words that might be null (safety check)
+  const validWords = words.filter(Boolean);
+  const currentWord = validWords[currentIndex];
+  const progress = Math.round(((currentIndex + 1) / validWords.length) * 100);
 
   const handlePlayAudio = async () => {
-    if (isPlayingAudio) return;
+    if (isPlayingAudio || !currentWord) return;
     try {
       setIsPlayingAudio(true);
       const audioData = await generateLessonAudio(currentWord.text);
@@ -45,16 +48,19 @@ export const ReviewSession: React.FC<ReviewSessionProps> = ({ words, onClose }) 
         (transcript) => {
           setSpokenText(transcript);
           const isCorrect = checkPronunciation(currentWord.text, transcript);
-          setFeedback(isCorrect ? 'correct' : 'incorrect');
-          setIsListening(false);
           
           if (isCorrect) {
-            // Auto play audio reward? Or just visual
+            setFeedback('correct');
+            playSuccessSound();
+            incrementReviewCount(currentWord.text);
+          } else {
+            setFeedback('incorrect');
           }
+          setIsListening(false);
         },
         () => setIsListening(false),
         (err) => {
-          alert("无法访问麦克风或识别失败: " + err);
+          alert("麦克风错误: " + err);
           setIsListening(false);
         }
       );
@@ -62,7 +68,7 @@ export const ReviewSession: React.FC<ReviewSessionProps> = ({ words, onClose }) 
   };
 
   const handleNext = () => {
-    if (currentIndex < words.length - 1) {
+    if (currentIndex < validWords.length - 1) {
       setFeedback('idle');
       setSpokenText('');
       setCurrentIndex(prev => prev + 1);
@@ -82,7 +88,7 @@ export const ReviewSession: React.FC<ReviewSessionProps> = ({ words, onClose }) 
         </button>
         <div className="flex flex-col items-center">
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">口语复习</span>
-          <span className="text-sm font-bold text-slate-800">{currentIndex + 1} / {words.length}</span>
+          <span className="text-sm font-bold text-slate-800">{currentIndex + 1} / {validWords.length}</span>
         </div>
         <div className="w-6" /> {/* Spacer */}
       </div>
@@ -99,7 +105,7 @@ export const ReviewSession: React.FC<ReviewSessionProps> = ({ words, onClose }) 
       <div className="flex-1 flex flex-col items-center justify-center p-6 relative overflow-hidden">
         
         {/* Flashcard */}
-        <div className="bg-white w-full max-w-sm aspect-[4/5] rounded-3xl shadow-xl border border-slate-100 flex flex-col items-center justify-center p-8 relative z-10 transition-all">
+        <div className={`bg-white w-full max-w-sm aspect-[4/5] rounded-3xl shadow-xl border transition-all duration-300 flex flex-col items-center justify-center p-8 relative z-10 ${feedback === 'correct' ? 'border-emerald-500 ring-4 ring-emerald-50' : 'border-slate-100'}`}>
           
           <button 
             onClick={handlePlayAudio}
@@ -112,45 +118,63 @@ export const ReviewSession: React.FC<ReviewSessionProps> = ({ words, onClose }) 
 
           <div className="flex-1 flex flex-col items-center justify-center text-center">
             <h2 className="text-4xl font-bold text-slate-800 mb-4">{currentWord.text}</h2>
-            {currentWord.lemma && currentWord.lemma !== currentWord.text.toLowerCase() && (
+            {currentWord.lemma && currentWord.lemma.toLowerCase() !== currentWord.text.toLowerCase() && (
                <p className="text-slate-400 text-sm mb-6 bg-slate-100 px-3 py-1 rounded-full">原型: {currentWord.lemma}</p>
             )}
             
-            {/* Hidden/Revealed Meaning */}
-            <div className={`transition-all duration-500 ${feedback === 'correct' ? 'opacity-100' : 'opacity-50 blur-sm hover:blur-none hover:opacity-100'}`}>
+            {/* Reveal meaning on success */}
+            <div className={`transition-all duration-500 ${feedback === 'correct' ? 'opacity-100 translate-y-0' : 'opacity-30 blur-sm hover:blur-none hover:opacity-100'}`}>
               <p className="text-xl text-slate-600 font-medium">{currentWord.meaning}</p>
             </div>
           </div>
 
           {/* Feedback Section inside card */}
-          <div className="h-16 w-full flex items-center justify-center">
+          <div className="h-20 w-full flex items-center justify-center border-t border-slate-50 mt-4 pt-4">
             {feedback === 'correct' && (
-              <div className="flex items-center text-emerald-600 animate-bounce-short">
-                <span className="material-icons-round text-3xl mr-2">check_circle</span>
-                <span className="font-bold text-lg">太棒了！准确！</span>
+              <div className="flex flex-col items-center text-emerald-600 animate-bounce-short">
+                <div className="flex items-center">
+                  <span className="material-icons-round text-2xl mr-2">check_circle</span>
+                  <span className="font-bold text-lg">发音完美！</span>
+                </div>
               </div>
             )}
+            
             {feedback === 'incorrect' && (
               <div className="flex flex-col items-center text-orange-500 animate-shake">
                 <div className="flex items-center mb-1">
-                  <span className="material-icons-round text-2xl mr-2">error_outline</span>
-                  <span className="font-bold">再试一次</span>
+                  <span className="material-icons-round text-xl mr-2">error_outline</span>
+                  <span className="font-bold">没听清，再试试</span>
                 </div>
-                <span className="text-xs text-slate-400">识别到: "{spokenText}"</span>
+                {spokenText && (
+                  <span className="text-xs text-slate-400 bg-slate-50 px-2 py-1 rounded max-w-full truncate">
+                    识别到: "{spokenText}"
+                  </span>
+                )}
               </div>
             )}
+            
             {feedback === 'idle' && isListening && (
-               <div className="text-emerald-600 text-sm font-medium animate-pulse">正在听...</div>
+               <div className="flex items-center text-emerald-600 text-sm font-medium animate-pulse">
+                 <span className="material-icons-round text-lg mr-2">mic</span>
+                 请大声朗读...
+               </div>
+            )}
+
+            {feedback === 'idle' && !isListening && (
+              <div className="text-slate-300 text-sm">
+                点击下方麦克风开始
+              </div>
             )}
           </div>
 
         </div>
 
         {/* Controls */}
-        <div className="mt-10 w-full max-w-sm flex items-center justify-center gap-6">
+        <div className="mt-10 w-full max-w-sm flex items-center justify-center gap-6 h-20">
           {feedback !== 'correct' ? (
              <button
               onClick={toggleMic}
+              disabled={isListening}
               className={`w-20 h-20 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-95 ${
                 isListening 
                   ? 'bg-red-500 text-white ring-4 ring-red-200 animate-pulse' 
@@ -158,7 +182,7 @@ export const ReviewSession: React.FC<ReviewSessionProps> = ({ words, onClose }) 
               }`}
             >
               <span className="material-icons-round text-4xl">
-                {isListening ? 'mic_off' : 'mic'}
+                {isListening ? 'more_horiz' : 'mic'}
               </span>
             </button>
           ) : (

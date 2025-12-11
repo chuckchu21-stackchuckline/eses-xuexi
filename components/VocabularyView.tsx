@@ -20,6 +20,11 @@ export const VocabularyView: React.FC = () => {
     setSpeechAvailable(isSpeechSupported());
   }, []);
 
+  const refreshData = () => {
+    setWords(getSavedWords());
+    setStats(getProgressStats());
+  };
+
   const handlePlay = async (word: SavedWord) => {
     if (playingWord) return;
     try {
@@ -51,8 +56,7 @@ export const VocabularyView: React.FC = () => {
         words={words} 
         onClose={() => {
           setIsReviewing(false);
-          // Refresh stats after review might change something (future proofing)
-          setStats(getProgressStats());
+          refreshData(); // Refresh list to show new review counts
         }} 
       />
     );
@@ -145,37 +149,55 @@ export const VocabularyView: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-3">
-            {words.map((word) => (
-              <div key={word.text} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between group">
-                <div className="flex-1">
-                  <div className="flex items-baseline gap-2 mb-1">
-                    <span className="text-lg font-bold text-slate-800">{word.text}</span>
-                    {word.lemma && word.lemma !== word.text.toLowerCase() && (
-                      <span className="text-xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">原: {word.lemma}</span>
-                    )}
+            {words.map((word) => {
+              const isReviewed = word.reviewCount && word.reviewCount > 0;
+              return (
+                <div 
+                  key={word.text} 
+                  className={`
+                    p-4 rounded-xl shadow-sm flex items-center justify-between group transition-all
+                    ${isReviewed ? 'bg-emerald-50/40 border border-emerald-100' : 'bg-white border border-slate-100'}
+                  `}
+                >
+                  <div className="flex-1">
+                    <div className="flex items-baseline gap-2 mb-1">
+                      <span className={`text-lg font-bold ${isReviewed ? 'text-emerald-900' : 'text-slate-800'}`}>{word.text}</span>
+                      
+                      {/* Review Badge */}
+                      {isReviewed && (
+                        <div className="flex items-center gap-1 bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                          <span className="material-icons-round text-[10px]">check</span>
+                          已掌握
+                        </div>
+                      )}
+
+                      {word.lemma && word.lemma !== word.text.toLowerCase() && (
+                        <span className="text-xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">原: {word.lemma}</span>
+                      )}
+                    </div>
+                    <div className="text-slate-600 text-sm">{word.meaning}</div>
                   </div>
-                  <div className="text-slate-600 text-sm">{word.meaning}</div>
+                  
+                  <div className="flex items-center gap-1">
+                    <button 
+                      onClick={() => handlePlay(word)}
+                      disabled={playingWord === word.text}
+                      className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${playingWord === word.text ? 'bg-emerald-100 text-emerald-600' : 'text-slate-400 hover:bg-slate-50 hover:text-emerald-500'}`}
+                    >
+                      <span className="material-icons-round">
+                        {playingWord === word.text ? 'more_horiz' : 'volume_up'}
+                      </span>
+                    </button>
+                    <button 
+                      onClick={() => handleDelete(word.text)}
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-slate-300 hover:bg-red-50 hover:text-red-500 transition-colors"
+                    >
+                      <span className="material-icons-round text-lg">delete_outline</span>
+                    </button>
+                  </div>
                 </div>
-                
-                <div className="flex items-center gap-1">
-                  <button 
-                    onClick={() => handlePlay(word)}
-                    disabled={playingWord === word.text}
-                    className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${playingWord === word.text ? 'bg-emerald-100 text-emerald-600' : 'text-slate-400 hover:bg-slate-50 hover:text-emerald-500'}`}
-                  >
-                    <span className="material-icons-round">
-                      {playingWord === word.text ? 'more_horiz' : 'volume_up'}
-                    </span>
-                  </button>
-                  <button 
-                    onClick={() => handleDelete(word.text)}
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-slate-300 hover:bg-red-50 hover:text-red-500 transition-colors"
-                  >
-                    <span className="material-icons-round text-lg">delete_outline</span>
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

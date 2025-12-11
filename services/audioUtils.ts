@@ -38,29 +38,34 @@ async function decodeAudioData(
 let audioContext: AudioContext | null = null;
 let currentSource: AudioBufferSourceNode | null = null;
 
+const getAudioContext = () => {
+  if (!audioContext) {
+    audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+  }
+  return audioContext;
+};
+
 export const playRawAudio = async (base64String: string, onEnded: () => void): Promise<void> => {
   try {
     // Stop any currently playing audio
     if (currentSource) {
-      currentSource.stop();
+      try { currentSource.stop(); } catch(e) {}
       currentSource = null;
     }
 
-    if (!audioContext) {
-      audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-    }
+    const ctx = getAudioContext();
 
     // Resume context if suspended (browser policy)
-    if (audioContext.state === 'suspended') {
-      await audioContext.resume();
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
     }
 
     const rawBytes = decode(base64String);
-    const audioBuffer = await decodeAudioData(rawBytes, audioContext);
+    const audioBuffer = await decodeAudioData(rawBytes, ctx);
 
-    const source = audioContext.createBufferSource();
+    const source = ctx.createBufferSource();
     source.buffer = audioBuffer;
-    source.connect(audioContext.destination);
+    source.connect(ctx.destination);
     
     source.onended = () => {
       onEnded();
@@ -78,7 +83,31 @@ export const playRawAudio = async (base64String: string, onEnded: () => void): P
 
 export const stopAudio = () => {
   if (currentSource) {
-    currentSource.stop();
+    try { currentSource.stop(); } catch(e) {}
     currentSource = null;
+  }
+};
+
+export const playSuccessSound = () => {
+  try {
+    const ctx = getAudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    // "Ding" sound: High pitch sine wave with quick decay
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, ctx.currentTime); // A5
+    osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.1); // Slide up to A6
+    
+    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+
+    osc.start();
+    osc.stop(ctx.currentTime + 0.5);
+  } catch (e) {
+    console.error("Error playing success sound", e);
   }
 };

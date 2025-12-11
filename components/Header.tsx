@@ -5,10 +5,11 @@ interface HeaderProps {
   onProfile?: () => void;
   onChat?: () => void;
   onInstall?: () => void;
+  onSettings?: () => void;
   activeView?: string;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onHome, onProfile, onChat, onInstall, activeView }) => {
+export const Header: React.FC<HeaderProps> = ({ onHome, onProfile, onChat, onInstall, onSettings, activeView }) => {
   return (
     <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100 px-4 py-3 flex items-center justify-between">
       {/* Home Button (Left) */}
@@ -23,15 +24,6 @@ export const Header: React.FC<HeaderProps> = ({ onHome, onProfile, onChat, onIns
       </div>
 
       <div className="flex items-center gap-1 sm:gap-2">
-        {/* Install/Help Button (New) */}
-        <button
-          onClick={onInstall}
-          className="w-9 h-9 rounded-full flex items-center justify-center bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-all active:scale-95"
-          title="安装教程"
-        >
-          <span className="material-icons-round text-xl">download_for_offline</span>
-        </button>
-
         {/* Chat Button */}
         <button 
           onClick={onChat}
@@ -57,6 +49,18 @@ export const Header: React.FC<HeaderProps> = ({ onHome, onProfile, onChat, onIns
           <span className="material-icons-round text-xl">
             {activeView === 'VOCABULARY' ? 'insights' : 'person'}
           </span>
+        </button>
+
+        {/* Settings Button */}
+        <button
+          onClick={onSettings}
+          className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
+            activeView === 'SETTINGS'
+              ? 'bg-slate-200 text-slate-700'
+              : 'bg-slate-50 text-slate-400 hover:bg-slate-100'
+          }`}
+        >
+          <span className="material-icons-round text-xl">settings</span>
         </button>
       </div>
     </header>

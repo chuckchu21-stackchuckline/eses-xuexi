@@ -13,31 +13,50 @@ const chunkSchema = {
   required: ["text", "isWord"]
 };
 
+const CUSTOM_KEY_STORAGE = "ENTORNO_CUSTOM_KEY";
+
 // Singleton instance
 let aiInstance: GoogleGenAI | null = null;
 
-// Lazy initialization to prevent top-level crashes in browser
+export const saveCustomApiKey = (key: string) => {
+  if (!key) {
+    localStorage.removeItem(CUSTOM_KEY_STORAGE);
+  } else {
+    localStorage.setItem(CUSTOM_KEY_STORAGE, key.trim());
+  }
+  aiInstance = null; // Reset instance to force re-init with new key
+};
+
+export const getCustomApiKey = () => {
+  return localStorage.getItem(CUSTOM_KEY_STORAGE) || "";
+};
+
+// Lazy initialization
 const getAI = () => {
   if (aiInstance) return aiInstance;
 
-  // Prioritize VITE_API_KEY for Vite/Vercel environments
-  let apiKey = (import.meta as any).env?.VITE_API_KEY;
+  // 1. Try Manual Key First (Highest Priority)
+  let apiKey = localStorage.getItem(CUSTOM_KEY_STORAGE);
 
-  // Fallback to process.env (Node/Standard) only if VITE key is missing
+  // 2. Fallback to Env Vars
+  if (!apiKey) {
+    apiKey = (import.meta as any).env?.VITE_API_KEY;
+  }
+
+  // 3. Fallback to process.env (Node/Standard)
   if (!apiKey && typeof process !== 'undefined' && process.env) {
     apiKey = process.env.API_KEY || process.env.VITE_API_KEY;
   }
 
   if (!apiKey) {
-    console.error("API Key not found in VITE_API_KEY or process.env.API_KEY");
-    // Throwing a specific error string that App.tsx catches to show the guide
+    console.error("API Key not found in LocalStorage, VITE_API_KEY or process.env.API_KEY");
     throw new Error("VITE_API_KEY_MISSING"); 
   }
 
-  // Sanitization: Trim whitespace
+  // Sanitization
   apiKey = apiKey.trim();
 
-  // Common User Mistake: Pasting the variable name into the value
+  // Check format
   if (apiKey.startsWith("VITE_API_KEY") || apiKey.includes("=")) {
      throw new Error("INVALID_KEY_FORMAT_PREFIX");
   }
@@ -45,6 +64,35 @@ const getAI = () => {
   aiInstance = new GoogleGenAI({ apiKey });
   return aiInstance;
 };
+
+// --- RETRY LOGIC HELPER ---
+const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function retryWithBackoff<T>(
+  operation: () => Promise<T>, 
+  retries = 3, 
+  baseDelay = 2000
+): Promise<T> {
+  try {
+    return await operation();
+  } catch (error: any) {
+    const errStr = (error.message || error.toString()).toLowerCase();
+    
+    // Check for rate limit errors (429 or RESOURCE_EXHAUSTED)
+    const isRateLimit = errStr.includes("429") || 
+                        errStr.includes("resource_exhausted") || 
+                        errStr.includes("quota");
+
+    if (retries > 0 && isRateLimit) {
+      console.warn(`Rate limit hit. Retrying in ${baseDelay}ms... (${retries} left)`);
+      await wait(baseDelay);
+      return retryWithBackoff(operation, retries - 1, baseDelay * 2); // Exponential backoff: 2s -> 4s -> 8s
+    }
+    
+    // If not a rate limit error or no retries left, throw original error
+    throw error;
+  }
+}
 
 // 1. Generate Lesson Text Content with Granularity
 export const generateLessonContent = async (scenario: string): Promise<LessonData> => {
@@ -85,7 +133,8 @@ export const generateLessonContent = async (scenario: string): Promise<LessonDat
     }
   `;
 
-  const response = await ai.models.generateContent({
+  // Wrap with retry logic
+  const response = await retryWithBackoff(() => ai.models.generateContent({
     model: "gemini-2.5-flash",
     contents: prompt,
     config: {
@@ -114,7 +163,7 @@ export const generateLessonContent = async (scenario: string): Promise<LessonDat
         required: ["scenario", "sentences", "tips"]
       }
     }
-  });
+  }));
 
   const jsonStr = response.text || "{}";
   return JSON.parse(jsonStr) as LessonData;
@@ -125,7 +174,8 @@ export const generateLessonAudio = async (text: string): Promise<string> => {
   const ai = getAI();
   if (!text) return "";
   
-  const response = await ai.models.generateContent({
+  // Wrap with retry logic
+  const response = await retryWithBackoff(() => ai.models.generateContent({
     model: "gemini-2.5-flash-preview-tts",
     contents: [{ parts: [{ text: text }] }],
     config: {
@@ -136,7 +186,7 @@ export const generateLessonAudio = async (text: string): Promise<string> => {
         },
       },
     },
-  });
+  }));
 
   const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
   
@@ -163,7 +213,8 @@ export const sendA2ChatMessage = async (chatSession: Chat, message: string) => {
   // Ensure Key is valid before sending
   getAI(); 
   
-  const result = await chatSession.sendMessage({ 
+  // Wrap with retry logic
+  const result = await retryWithBackoff(() => chatSession.sendMessage({ 
     message: message,
     config: {
       responseMimeType: "application/json",
@@ -180,7 +231,7 @@ export const sendA2ChatMessage = async (chatSession: Chat, message: string) => {
         required: ["spanish", "chinese", "chunks"]
       }
     }
-  });
+  }));
 
   const jsonStr = result.text || "{}";
   return JSON.parse(jsonStr) as { spanish: string; chinese: string; chunks: Chunk[] };

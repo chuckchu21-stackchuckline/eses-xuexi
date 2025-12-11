@@ -1,5 +1,5 @@
 {
-  "name": "Entorno - 西语私教",
+  "name": "ChuckLine - 西语私教",
   "description": "你的随身场景化西班牙语私教。输入任何场景，立即生成A2水平的实用对话、词汇和真人级发音。",
   "requestFramePermissions": [
     "microphone"

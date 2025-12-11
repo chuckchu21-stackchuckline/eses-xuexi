@@ -95,7 +95,7 @@ export const SettingsView: React.FC = () => {
       </div>
 
       <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 text-center">
-        <p className="text-xs text-slate-400 mb-2">Entorno v1.0.1</p>
+        <p className="text-xs text-slate-400 mb-2">ChuckLine v1.0.1</p>
         <p className="text-xs text-slate-400">Made with 💚 for Spanish Learners</p>
       </div>
     </div>

@@ -18,9 +18,9 @@ export const Header: React.FC<HeaderProps> = ({ onHome, onProfile, onChat, onIns
         onClick={onHome}
       >
         <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center group-hover:bg-emerald-700 transition-colors shadow-sm shadow-emerald-200">
-          <span className="text-white font-bold text-lg">E</span>
+          <span className="text-white font-bold text-lg">C</span>
         </div>
-        <h1 className="text-lg font-bold text-slate-800 tracking-tight hidden xs:block">Entorno</h1>
+        <h1 className="text-lg font-bold text-slate-800 tracking-tight hidden xs:block">ChuckLine</h1>
       </div>
 
       <div className="flex items-center gap-1 sm:gap-2">
